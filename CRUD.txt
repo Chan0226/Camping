@@ -1,0 +1,395 @@
+
+※ data/db/start.bat 실행
+
+▶기초 Express 앱 작성
+npm 설치해야된다 
+
+npm init -y
+npm i express mongoose ejs		// express, mongoose, ejs 설치
+
+-views 폴더 생성
+ㄴ home.ejs
+
+-app.js 
+const express = require('express');
+const app = express( );
+
+app.set('view engine', 'ejs');			// ejs 엔진
+app.set('views', path.join(__dirname, 'views'))
+
+app.get('/', (req, res) => {
+    res.render('home')			// home.ejs 렌더링
+});
+
+app.listen(3000, () => {
+    console.log('Serving on port 3000')
+})
+
+
+
+- home.ejs
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+</head>
+
+<body>
+    <h1>HOME! YELP CAMP!</h1>
+
+</body>
+
+</html>
+
+
+
+▶캠프그라운드 모델 기초
+캠핑장 등록 할 때 사용하는 모델
+
+models 폴더
+
+-campground.js
+
+const mongoose = require('mongoose');	// mongoose 연결
+const Schema = mongoose.Schema;		// 스키마 생성
+
+const CampgroundSchema = new Schema({
+   title : String,
+   price : String,
+   description : String,
+   location : String
+});
+
+			// 이름은 Campground, 스키마 : CampgroundSchema
+module.exports = mongoose.model('Campground', CampgroundSchema);	// 데이터 export
+
+// 외부에서 Campground라는 모델 사용가능
+
+
+-app.js
+
+
+const express = require('express');
+const path = require('path');
+const mongoose = require('mongoose');
+const Campground = require('./models/campground'); // 모델 불러오기
+
+					// db이름 yelp-camp
+mongoose.connect('mongodb://localhost:27017/yelp-camp', 	// mongoose 연결
+);
+
+
+const db = mongoose.connection;
+db.on("error", console.error.bind(console, "connection error:"));
+db.once("open", () => {
+    console.log("Database connected");
+});
+
+
+const app = express();
+
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'))
+
+
+// 새로운 camp 생성
+app.get('/makecampground', async(req, res) => {
+   const camp = new Campground({title : 'My Backyard', description: 'cheap camping!'});	// camp 생성(자바스크립트)
+   await camp.save( );	// 모델에 저장
+   res.send(camp)
+})
+
+
+★★★ 테스트 ( cmd 창에서 실행, git bash 안됨)
+mongo
+use yelp-camp
+db.campgrounds.find( ) 
+> { "_id" : dasdefaf , "title" : 'My Backyard', "description": 'cheap camping!'}
+
+
+
+▶캠프그라운드에 시드
+- seeds 폴더 생성
+ㄴcities.js
+   도시에 관한 내용
+ㄴseedHelpers.js
+   도시 설명어 세트
+
+ㄴindex.js (데이터나 모델을 수정할 때만 사용)
+
+const mongoose = require('mongoose');
+const cities = require('./cities');	// cities 불러오기
+const { places, descriptors } = require('./seedHelpers');	// place, descriptors 불러오기
+const Campground = require('./models/campground'); // 모델 불러오기
+
+					// db이름 yelp-camp
+mongoose.connect('mongodb://localhost:27017/yelp-camp', {	// mongoose 연결
+    useNewUrlParser: true,
+    useCreateIndex: true,
+    useUnifiedTopology: true
+});
+
+const db = mongoose.connection;
+
+db.on("error", console.error.bind(console, "connection error:"));
+db.once("open", () => {
+    console.log("Database connected");
+});
+
+// 배열에서 임의 요소 반환
+const sample = array => array[Math.floor(Math.random() * array.length)];
+
+const seedDB = async () => {
+    await Campground.deleteMany({});		// 전부 다 삭제 ( 실행될때마다)
+    for (let i = 0; i < 50; i++) {		// campground 50개 생성
+        const random1000 = Math.floor(Math.random() * 1000);
+        const camp = new Campground({		// 새로운 Campground 생성
+            location: `${cities[random1000].city}, ${cities[random1000].state}`,	// '도시', '주'
+            title: `${sample(descriptors)} ${sample(places)}`	// sample에서 설명, 장소 불러오기 
+        })
+        await camp.save();
+    }
+}
+
+seedDB().then(() => {			// seedDB 실행
+    mongoose.connection.close();		// 연결 끊기
+})
+
+
+
+-seedHelpers.js
+
+module.exports.descriptors = [	// export
+    'Forest',			
+    'Ancient',
+    'Petrified',
+    'Roaring',
+    'Cascade',
+    'Tumbling',
+    'Silent',
+    'Redwood',
+    'Bullfrog',
+    'Maple',
+    'Misty',
+    'Elk',
+    'Grizzly',
+    'Ocean',
+    'Sea',
+    'Sky',
+    'Dusty',
+    'Diamond'
+]
+
+
+- node seeds/index.js
+
+
+
+
+▶캠프그라운드 : index
+
+app.get('/campgrounds', async (req, res) => {
+    const campgrounds = await Campground.find({});	// 모든 Campground 불러오기
+    res.render('campgrounds/index', { campgrounds })	// campgrounds 렌더링(view폴더/campgrounds폴더/index.ejs)
+});
+
+-campground.ejs
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campgrounds</title>
+</head>
+
+<body>
+    <h1>All Campgrounds</h1>
+    <div>
+        <a href="/campgrounds/new">Add Campground</a>
+    </div>
+    <ul>
+        <% for (let campground of campgrounds){%>
+        <li><a href="/campgrounds/<%= campground._id %>"><%= campground.title %></a></li>	// id 붙여서 관련링크 만들기
+        <% }%>
+    </ul>
+
+</body>
+
+</html>
+
+
+
+▶캠프그라운드 : show
+
+라우트 등록
+
+-app.js
+
+app.get('/campgrounds/:id', async (req, res,) => {
+    const campground = await Campground.findById(req.params.id)
+    res.render('campgrounds/show', { campground });   // view폴더/campgrounds폴더/show.ejs
+});
+
+
+
+-show.ejs
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Show</title>
+</head>
+
+<body>
+    <h1><%= campground.title %></h1>
+    <h2><%= campground.location %></h2>
+    <p> <a href="/campgrounds/<%=campground._id%>/edit">Edit</a>	
+    </p>
+    <p>
+    <form action="/campgrounds/<%=campground._id%>?_method=DELETE" method="POST">
+        <button>Delete</button>
+    </form>
+    </p>
+    <footer>
+        <a href="/campgrounds">All Campgrounds</a>
+    </footer>
+</body>
+
+</html>
+
+
+
+▶캠프그라운드 : New&Create
+
+-app.js
+
+app.get('/campgrounds/new', (req, res) => {	
+    res.render('campgrounds/new');
+})
+
+app.post('/campgrounds', async (req, res) => {
+    const campground = new Campground(req.body.campground);
+    await campground.save();
+    res.redirect(`/campgrounds/${campground._id}`)
+})
+
+
+
+- new.ejs
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Campground</title>
+</head>
+
+<body>
+    <form action="/campgrounds" method="POST">
+        <div>
+            <label for="title">Title</label>
+            <input type="text" id="title" name="campground[title]">
+        </div>
+        <div>
+            <label for="location">Location</label>
+            <input type="text" id="location" name="campground[location]">
+        </div>
+        <button>Add Campground</button>
+    </form>
+    <a href="/campgrounds">All Campgrounds</a>
+
+</body>
+
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
